@@ -22,7 +22,7 @@ pub mod instructions;
 pub mod states;
 pub mod events;
 
-declare_id!("4koFDYG9ymcJtV7RTjoheReoQECcLmdWdUJ5WfYPHE4T");
+declare_id!("Gs9h1gud4uUGri9nTu38QuotTXnwmiaoh23wqocZma96");
 
 #[program]
 pub mod captns_classroom {
@@ -34,7 +34,7 @@ pub mod captns_classroom {
     pub fn delete_student(ctx: Context<DeleteStudent>, first_name: String) -> Result<()> {
         delete_student(ctx, first_name)
     }
-    pub fn submit_grades(ctx: Context<SubmitGrades>, midterm: u8, _final: u8, homework_a: u8, homework_b: u8) -> Result<()> {
+    pub fn submit_grades(ctx: Context<SubmitGrades>, midterm: f32, _final: f32, homework_a: f32, homework_b: f32) -> Result<()> {
         submit_grades(ctx, midterm, _final, homework_a, homework_b)
     }
     pub fn delete_grades(ctx: Context<DeleteGrades>) -> Result<()> {

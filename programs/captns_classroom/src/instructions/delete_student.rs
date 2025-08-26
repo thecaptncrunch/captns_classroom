@@ -2,7 +2,7 @@ use anchor_lang::{prelude::*};
 
 use crate::states::*;
 
-pub fn delete_student(ctx: Context<DeleteStudent>) -> Result<()> {
+pub fn delete_student(_ctx: Context<DeleteStudent>) -> Result<()> {
     Ok(())
 }
 

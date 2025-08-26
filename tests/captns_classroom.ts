@@ -1,15 +1,13 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { CaptnsClassroom } from "../target/types/captns_classroom";
-import { PublicKey, SystemProgram } from '@solana/web3.js';
+import { PublicKey } from '@solana/web3.js';
 import { assert } from "chai";
-import crypto from "crypto";
 
-const GRADE_SEED = "NEW_GRADES";
 const STUDENT_SEED = "NEW_STUDENT"; 
 
 describe("captns_classroom", () => {
-  // Configure the client to use the local cluster.
+
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
@@ -29,7 +27,6 @@ describe("captns_classroom", () => {
   const empty_name = "";
   const character_name = "🍅";
   const repeat_name = "Alyssa";
-  const single_character = "N";
 
   // establish student grades
   const alyssa_midterm1 = 187.5;
@@ -62,82 +59,521 @@ describe("captns_classroom", () => {
   const marnie_homeworka1 = 100.0;
   const marnie_homeworkb1 = 89.2;
 
-  const marnie_midterm2 = 56.5;
-  const marnie_final2 = 0.6;
-  const marnie_homeworka2 = 99.7;
-  const marnie_homeworkb2 = 89.2;
-
-  const marnie_midterm3 = 56.5;
-  const marnie_final3 = 56.6;
-  const marnie_homeworka3 = 4.7;
-  const marnie_homeworkb3 = 89.2;
-
-  const marnie_midterm4 = 56.5;
-  const marnie_final4 = 5.0;
-  const marnie_homeworka4 = 99.7;
-  const marnie_homeworkb4 = 2.2;
-
-  const marnie_midterm5 = 56.5;
-  const marnie_final5 = 56.6;
-  const marnie_homeworka5 = 99.7;
-  const marnie_homeworkb5 = 89.2;
-
   const vee_midterm = 56.5;
   const vee_final = 78.0;
   const vee_homeworka = 99.7;
   const vee_homeworkb = 89.2;
 
-describe("Create students", async () => {
+  describe("Create students", () => {
+    it("1) Should properly create student", async () => {
+      await airdrop(provider.connection, alyssa.publicKey);
+      const [student_pkey, bump] = getStudentAcctAddress(
+        alyssa_firstname,
+        alyssa.publicKey,
+        program.programId
+      );
 
-  it("Should successfully create a new student", async () => {
-    await airdrop(provider.connection, alyssa.publicKey);
-    const [student_pkey, student_bump] = getStudentAcctAddress(alyssa_firstname, alyssa.publicKey, program.programId);
+      await program.methods
+        .createStudent(alyssa_firstname)
+        .accounts({
+          studentIdentifier: alyssa.publicKey,
+        })
+        .signers([alyssa])
+        .rpc({ commitment: "confirmed" });
 
-    await program.methods.createStudent(alyssa_firstname).accounts( 
-      {
-        studentIdentifier: alyssa.publicKey,
+      const studentData = await program.account.student.fetch(student_pkey);
+      assert.strictEqual(studentData.firstName, alyssa_firstname);
+      assert.strictEqual(studentData.studentId.toString(), alyssa.publicKey.toString());
+    });
+
+    it("2) Should not allow the same student to be created twice", async () => {
+      let threw = false;
+      try {
+        await program.methods
+          .createStudent(repeat_name) // "Alyssa" again
+          .accounts({
+            studentIdentifier: alyssa.publicKey,
+          })
+          .signers([alyssa])
+          .rpc({ commitment: "confirmed" });
+      } catch (err) {
+        threw = true;
       }
-    ).signers([alyssa]).rpc({ commitment: "confirmed" })
+      assert.isTrue(threw, "Duplicate student creation should throw");
+    });
+
+    it("3) Should not allow a name past the maximum allowed characters", async () => {
+      const longName = "X".repeat(40); // adjust if your program enforces max length
+      const tmpStudent = anchor.web3.Keypair.generate();
+      await airdrop(provider.connection, tmpStudent.publicKey);
+
+      let threw = false;
+      try {
+        await program.methods
+          .createStudent(longName)
+          .accounts({
+            studentIdentifier: tmpStudent.publicKey,
+          })
+          .signers([tmpStudent])
+          .rpc({ commitment: "confirmed" });
+      } catch {
+        threw = true;
+      }
+      assert.isTrue(threw, "Should reject names longer than allowed");
+    });
+
+    it("4) Should not allow a name with any special characters", async () => {
+      const tmpStudent = anchor.web3.Keypair.generate();
+      await airdrop(provider.connection, tmpStudent.publicKey);
+
+      let threw = false;
+      try {
+        await program.methods
+          .createStudent(character_name) // 🍅
+          .accounts({
+            studentIdentifier: tmpStudent.publicKey,
+          })
+          .signers([tmpStudent])
+          .rpc({ commitment: "confirmed" });
+      } catch {
+        threw = true;
+      }
+      assert.isTrue(threw, "Should reject special character names");
+    });
+
+    it("5) Should not allow a student to create an account more than once", async () => {
+      let threw = false;
+      try {
+        await program.methods
+          .createStudent(alyssa_firstname)
+          .accounts({
+            studentIdentifier: alyssa.publicKey,
+          })
+          .signers([alyssa])
+          .rpc({ commitment: "confirmed" });
+      } catch {
+        threw = true;
+      }
+      assert.isTrue(threw, "Same student wallet should not be able to create twice");
+    });
+
+    it("6) Should allow multiple students to create accounts", async () => {
+      await airdrop(provider.connection, marnie.publicKey);
+      await airdrop(provider.connection, vee.publicKey);
+
+      const [marnie_pda] = getStudentAcctAddress(marnie_firstname, marnie.publicKey, program.programId);
+      const [vee_pda] = getStudentAcctAddress(vee_firstname, vee.publicKey, program.programId);
+
+      await program.methods
+        .createStudent(marnie_firstname)
+        .accounts({ studentIdentifier: marnie.publicKey })
+        .signers([marnie])
+        .rpc({ commitment: "confirmed" });
+
+      await program.methods
+        .createStudent(vee_firstname)
+        .accounts({ studentIdentifier: vee.publicKey })
+        .signers([vee])
+        .rpc({ commitment: "confirmed" });
+
+      const marnieData = await program.account.student.fetch(marnie_pda);
+      const veeData = await program.account.student.fetch(vee_pda);
+
+      assert.strictEqual(marnieData.firstName, marnie_firstname);
+      assert.strictEqual(veeData.firstName, vee_firstname);
+    });
+
+    it("7) Should not allow a student to create an account with no characters", async () => {
+      const tmpStudent = anchor.web3.Keypair.generate();
+      await airdrop(provider.connection, tmpStudent.publicKey);
+
+      let threw = false;
+      try {
+        await program.methods
+          .createStudent(empty_name)
+          .accounts({
+            studentIdentifier: tmpStudent.publicKey,
+          })
+          .signers([tmpStudent])
+          .rpc({ commitment: "confirmed" });
+      } catch {
+        threw = true;
+      }
+      assert.isTrue(threw, "Should reject empty names");
+    });
   });
 
-  it("Is initialized!", async () => {
-    // Add your test here.
-    const tx = await program.methods.initialize().rpc();
-    console.log("Your transaction signature", tx);
+  describe("Delete students", () => {
+    it("1) Should fail when removing non-existent student", async () => {
+      const ghost = anchor.web3.Keypair.generate();
+      await airdrop(provider.connection, ghost.publicKey);
+
+      const ghost_name = "Ghost";
+
+      let threw = false;
+      try {
+        await program.methods
+          .deleteStudent(ghost_name)
+          .accounts({
+            studentIdentifier: ghost.publicKey,
+          })
+          .signers([ghost])
+          .rpc({ commitment: "confirmed" });
+      } catch {
+        threw = true;
+      }
+      assert.isTrue(threw, "Deleting a non-existent student should fail");
+    });
+
+    it("2) Should only allow student to close their own account", async () => {
+      await airdrop(provider.connection, alyssa.publicKey);
+      const [alyssa_pda] = getStudentAcctAddress(
+        alyssa_firstname,
+        alyssa.publicKey,
+        program.programId
+      );
+      try {
+        await program.account.student.fetch(alyssa_pda);
+      } catch {
+        await program.methods
+          .createStudent(alyssa_firstname)
+          .accounts({ studentIdentifier: alyssa.publicKey })
+          .signers([alyssa])
+          .rpc({ commitment: "confirmed" });
+      }
+
+      await airdrop(provider.connection, marnie.publicKey);
+      let threw = false;
+      try {
+        await program.methods
+          .deleteStudent(alyssa_firstname)
+          .accounts({
+            studentIdentifier: alyssa.publicKey,
+          })
+          .signers([marnie])
+          .rpc({ commitment: "confirmed" });
+      } catch {
+        threw = true;
+      }
+      assert.isTrue(threw, "Only the student should be able to close their own account");
+    });
+
+    it("3) Should successfully close account", async () => {
+      await airdrop(provider.connection, alyssa.publicKey);
+      const [alyssa_pda] = getStudentAcctAddress(
+        alyssa_firstname,
+        alyssa.publicKey,
+        program.programId
+      );
+      let exists = true;
+      try {
+        await program.account.student.fetch(alyssa_pda);
+      } catch {
+        exists = false;
+      }
+      if (!exists) {
+        await program.methods
+          .createStudent(alyssa_firstname)
+          .accounts({ studentIdentifier: alyssa.publicKey })
+          .signers([alyssa])
+          .rpc({ commitment: "confirmed" });
+      }
+
+      await program.methods
+        .deleteStudent(alyssa_firstname)
+        .accounts({ studentIdentifier: alyssa.publicKey })
+        .signers([alyssa])
+        .rpc({ commitment: "confirmed" });
+
+      let fetchThrew = false;
+      try {
+        await program.account.student.fetch(alyssa_pda);
+      } catch {
+        fetchThrew = true;
+      }
+      assert.isTrue(fetchThrew, "Student account should be closed and no longer fetchable");
+    });
+
+    it("4) Should allow student to create another submission after closing", async () => {
+      await airdrop(provider.connection, alyssa.publicKey);
+
+      const [new_pda] = getStudentAcctAddress(
+        alyssa_firstname,
+        alyssa.publicKey,
+        program.programId
+      );
+
+      await program.methods
+        .createStudent(alyssa_firstname)
+        .accounts({ studentIdentifier: alyssa.publicKey })
+        .signers([alyssa])
+        .rpc({ commitment: "confirmed" });
+
+      const studentData = await program.account.student.fetch(new_pda);
+      assert.strictEqual(studentData.firstName, alyssa_firstname);
+      assert.strictEqual(studentData.studentId.toString(), alyssa.publicKey.toString());
+    });
   });
 
-  it("Is initialized!", async () => {
-    // Add your test here.
-    const tx = await program.methods.initialize().rpc();
-    console.log("Your transaction signature", tx);
-  });
-  
-  it("Is initialized!", async () => {
-    // Add your test here.
-    const tx = await program.methods.initialize().rpc();
-    console.log("Your transaction signature", tx);
-  });
+  describe("Submit grades", () => {
+    it("1) Should fail if all grades are not submitted", async () => {
+      await airdrop(provider.connection, alyssa.publicKey);
+      const [alyssa_pda] = getStudentAcctAddress(alyssa_firstname, alyssa.publicKey, program.programId);
 
-  it("Is initialized!", async () => {
-    // Add your test here.
-    const tx = await program.methods.initialize().rpc();
-    console.log("Your transaction signature", tx);
+      try { await program.account.student.fetch(alyssa_pda); }
+      catch {
+        await program.methods
+          .createStudent(alyssa_firstname)
+          .accounts({ studentIdentifier: alyssa.publicKey })
+          .signers([alyssa])
+          .rpc({ commitment: "confirmed" });
+      }
+
+      let threw = false;
+      try {
+        await program.methods
+          .submitGrades(
+            alyssa_midterm1,
+            null as any,              // intentionally missing final
+            alyssa_homeworka1,
+            alyssa_homeworkb1
+          )
+          .accounts({ submitter: alyssa.publicKey })
+          .signers([alyssa])
+          .rpc({ commitment: "confirmed" });
+      } catch { threw = true; }
+      assert.isTrue(threw, "Submitting without all grade fields should fail");
+    });
+
+    it("2) Should successfully create grades", async () => {
+      await airdrop(provider.connection, alyssa.publicKey);
+      const [alyssa_pda] = getStudentAcctAddress(alyssa_firstname, alyssa.publicKey, program.programId);
+
+      try { await program.account.student.fetch(alyssa_pda); }
+      catch {
+        await program.methods
+          .createStudent(alyssa_firstname)
+          .accounts({ studentIdentifier: alyssa.publicKey })
+          .signers([alyssa])
+          .rpc({ commitment: "confirmed" });
+      }
+
+      await program.methods
+        .submitGrades(
+          alyssa_midterm1,
+          alyssa_final1,
+          alyssa_homeworka1,
+          alyssa_homeworkb1
+        )
+        .accounts({ submitter: alyssa.publicKey })
+        .signers([alyssa])
+        .rpc({ commitment: "confirmed" });
+
+      const s = await program.account.student.fetch(alyssa_pda);
+      assert.strictEqual(s.firstName, alyssa_firstname);
+      assert.strictEqual(s.studentId.toString(), alyssa.publicKey.toString());
+      assert.strictEqual(Number(s.finalGrade), alyssa_final1);
+    });
+
+    it("3) Should successfully and accurately update final grade (via re-submission)", async () => {
+      await airdrop(provider.connection, alyssa.publicKey);
+      const [alyssa_pda] = getStudentAcctAddress(alyssa_firstname, alyssa.publicKey, program.programId);
+
+      try { await program.account.student.fetch(alyssa_pda); }
+      catch {
+        await program.methods
+          .createStudent(alyssa_firstname)
+          .accounts({ studentIdentifier: alyssa.publicKey })
+          .signers([alyssa])
+          .rpc({ commitment: "confirmed" });
+      }
+
+      await program.methods
+        .submitGrades(
+          alyssa_midterm2,
+          alyssa_final2,
+          alyssa_homeworka2,
+          alyssa_homeworkb2
+        )
+        .accounts({ submitter: alyssa.publicKey })
+        .signers([alyssa])
+        .rpc({ commitment: "confirmed" });
+
+      await program.methods
+        .submitGrades(
+          alyssa_midterm2,          // unchanged midterm
+          alyssa_final3,            // new final
+          alyssa_homeworka2,        // unchanged homework
+          alyssa_homeworkb2
+        )
+        .accounts({ submitter: alyssa.publicKey })
+        .signers([alyssa])
+        .rpc({ commitment: "confirmed" });
+
+      const s1 = await program.account.student.fetch(alyssa_pda);
+      assert.strictEqual(Number(s1.finalGrade), alyssa_final3);
+    });
+
+    it("4) Should only allow student to update final grade (re-submission must be by owner)", async () => {
+      await airdrop(provider.connection, alyssa.publicKey);
+      await airdrop(provider.connection, marnie.publicKey);
+
+      const [alyssa_pda] = getStudentAcctAddress(alyssa_firstname, alyssa.publicKey, program.programId);
+      try { await program.account.student.fetch(alyssa_pda); }
+      catch {
+        await program.methods
+          .createStudent(alyssa_firstname)
+          .accounts({ studentIdentifier: alyssa.publicKey })
+          .signers([alyssa])
+          .rpc({ commitment: "confirmed" });
+      }
+
+      await program.methods
+        .submitGrades(
+          alyssa_midterm3,
+          alyssa_final3,
+          alyssa_homeworka3,
+          alyssa_homeworkb3
+        )
+        .accounts({ submitter: alyssa.publicKey })
+        .signers([alyssa])
+        .rpc({ commitment: "confirmed" });
+
+      let threw = false;
+      try {
+        await program.methods
+          .submitGrades(
+            alyssa_midterm3,
+            alyssa_final4,          // attempt to change final
+            alyssa_homeworka3,
+            alyssa_homeworkb3
+          )
+          .accounts({ submitter: alyssa.publicKey }) // still Alyssa's account
+          .signers([marnie])                         // signed by Marnie → should fail
+          .rpc({ commitment: "confirmed" });
+      } catch { threw = true; }
+      assert.isTrue(threw, "Only the owning student should be able to update their grades");
+    });
+
+    it("5) Should not allow a grade higher than 100 (create and update via submitGrades)", async () => {
+      await airdrop(provider.connection, vee.publicKey);
+
+      const [vee_pda] = getStudentAcctAddress(vee_firstname, vee.publicKey, program.programId);
+      try { await program.account.student.fetch(vee_pda); }
+      catch {
+        await program.methods
+          .createStudent(vee_firstname)
+          .accounts({ studentIdentifier: vee.publicKey })
+          .signers([vee])
+          .rpc({ commitment: "confirmed" });
+      }
+
+      let threwSubmit = false;
+      try {
+        await program.methods
+          .submitGrades(vee_midterm, 101.0, vee_homeworka, vee_homeworkb)
+          .accounts({ submitter: vee.publicKey })
+          .signers([vee])
+          .rpc({ commitment: "confirmed" });
+      } catch { threwSubmit = true; }
+      assert.isTrue(threwSubmit, "Final grade > 100 should be rejected");
+
+      await program.methods
+        .submitGrades(vee_midterm, vee_final, vee_homeworka, vee_homeworkb)
+        .accounts({ submitter: vee.publicKey })
+        .signers([vee])
+        .rpc({ commitment: "confirmed" });
+
+      let threwUpdate = false;
+      try {
+        await program.methods
+          .submitGrades(vee_midterm, 100.1, vee_homeworka, vee_homeworkb)
+          .accounts({ submitter: vee.publicKey })
+          .signers([vee])
+          .rpc({ commitment: "confirmed" });
+      } catch { threwUpdate = true; }
+      assert.isTrue(threwUpdate, "Updating to > 100 should be rejected");
+    });
+
+    it("6) Should not allow a grade lower than 5 (create and update via submitGrades)", async () => {
+      await airdrop(provider.connection, marnie.publicKey);
+
+      const [marnie_pda] = getStudentAcctAddress(marnie_firstname, marnie.publicKey, program.programId);
+      try { await program.account.student.fetch(marnie_pda); }
+      catch {
+        await program.methods
+          .createStudent(marnie_firstname)
+          .accounts({ studentIdentifier: marnie.publicKey })
+          .signers([marnie])
+          .rpc({ commitment: "confirmed" });
+      }
+
+      let threwSubmit = false;
+      try {
+        await program.methods
+          .submitGrades(marnie_midterm1, 4.9, marnie_homeworka1, marnie_homeworkb1)
+          .accounts({ submitter: marnie.publicKey })
+          .signers([marnie])
+          .rpc({ commitment: "confirmed" });
+      } catch { threwSubmit = true; }
+      assert.isTrue(threwSubmit, "Final grade < 5 should be rejected");
+
+      await program.methods
+        .submitGrades(marnie_midterm1, marnie_final1, marnie_homeworka1, marnie_homeworkb1)
+        .accounts({ submitter: marnie.publicKey })
+        .signers([marnie])
+        .rpc({ commitment: "confirmed" });
+
+      let threwUpdate = false;
+      try {
+        await program.methods
+          .submitGrades(marnie_midterm1, 0.0, marnie_homeworka1, marnie_homeworkb1)
+          .accounts({ submitter: marnie.publicKey })
+          .signers([marnie])
+          .rpc({ commitment: "confirmed" });
+      } catch { threwUpdate = true; }
+      assert.isTrue(threwUpdate, "Updating to < 5 should be rejected");
+    });
+
+    it("7) Should update on re-submission (no duplicate account)", async () => {
+      await airdrop(provider.connection, alyssa.publicKey);
+      const [alyssa_pda] = getStudentAcctAddress(alyssa_firstname, alyssa.publicKey, program.programId);
+
+      try { await program.account.student.fetch(alyssa_pda); }
+      catch {
+        await program.methods
+          .createStudent(alyssa_firstname)
+          .accounts({ studentIdentifier: alyssa.publicKey })
+          .signers([alyssa])
+          .rpc({ commitment: "confirmed" });
+      }
+
+      await program.methods
+        .submitGrades(
+          alyssa_midterm5,
+          alyssa_final5,
+          alyssa_homeworka5,
+          alyssa_homeworkb5
+        )
+        .accounts({ submitter: alyssa.publicKey })
+        .signers([alyssa])
+        .rpc({ commitment: "confirmed" });
+
+      await program.methods
+        .submitGrades(
+          alyssa_midterm4,
+          alyssa_final4,
+          alyssa_homeworka4,
+          alyssa_homeworkb4
+        )
+        .accounts({ submitter: alyssa.publicKey })
+        .signers([alyssa])
+        .rpc({ commitment: "confirmed" });
+
+      const s = await program.account.student.fetch(alyssa_pda);
+      assert.strictEqual(Number(s.finalGrade), alyssa_final4); // updated
+    });
   });
-
-  it("Is initialized!", async () => {
-    // Add your test here.
-    const tx = await program.methods.initialize().rpc();
-    console.log("Your transaction signature", tx);
-  });
-
-  it("Is initialized!", async () => {
-    // Add your test here.
-    const tx = await program.methods.initialize().rpc();
-    console.log("Your transaction signature", tx);
-  });
-
-})
-
 });
 
 async function airdrop(connection: any, address: any, amount = 1000000000) {
@@ -149,30 +585,8 @@ function getStudentAcctAddress(first_name: string, student: PublicKey, programID
     [
       anchor.utils.bytes.utf8.encode(first_name),
       anchor.utils.bytes.utf8.encode(STUDENT_SEED),
-      student.toBuffer()
-    ], programID);
-}
-
-async function checkStudent(
-  program: anchor.Program<CaptnsClassroom>,
-  student_id: PublicKey,
-  first_name: string,
-  final_grade: number,
-  bump: number,
-) {
-  let studentData = await program.account.student.fetch(student);
-
-  if (student_id) {
-    assert.strictEqual(studentData.studentId.toString(), student_id.toString(), `Tweet author should be ${tweet_author.toString()} but was ${tweetData.tweetAuthor.toString()}`)
-  }
-  if (first_name) {
-    assert.strictEqual(studentData.firstName, first_name, `First name should be "${topic}" but was "${tweetData.topic}"`);
-  }
-  if (final_grade) {
-    assert.strictEqual(studentData.finalGrade, final_grade, `Final grade should be "${content}" but was "${tweetData.content}"`);
-  }
-  if (bump) {
-     assert.strictEqual(studentData.bump.toString(), bump.toString(), `Tweet bump should be ${bump} but was ${tweetData.bump}`)
-  }
-
+      student.toBuffer(),
+    ],
+    programID
+  );
 }
