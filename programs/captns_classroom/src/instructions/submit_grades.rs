@@ -2,7 +2,6 @@ use anchor_lang::{prelude::*};
 
 use crate::{instruction};
 use crate::states::{self, *};
-use crate::events::{self, *};
 use crate::errors::ClassError;
 
 pub fn submit_grades(ctx: Context<SubmitGrades>, midterm: f32, _final: f32, homework_a: f32, homework_b: f32) 
@@ -43,10 +42,6 @@ pub fn submit_grades(ctx: Context<SubmitGrades>, midterm: f32, _final: f32, home
     grades.set_final = _final;
     grades.set_a = homework_a;
     grades.set_b = homework_b;
-
-    emit!(GradeEvent {
-        student_name: student.first_name.clone(),
-    });  
 
     // calculate and update the students final grade
     let midterm_grade = midterm * states::MIDTERM_WEIGHT;

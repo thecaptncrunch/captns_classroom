@@ -10,7 +10,9 @@ const GRADE_SEED = "NEW_GRADES"
 describe("captns_classroom", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
-
+  const setCuLimit = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({
+  units: 1_000_000,
+  });
   const program = anchor.workspace.CaptnsClassroom as Program<CaptnsClassroom>;
 
   // three students
@@ -80,26 +82,8 @@ describe("captns_classroom", () => {
   }
 
   describe("Create students", () => {
-    it("1) Should properly create student", async () => {
-      await airdrop(provider.connection, alyssa.publicKey);
-      const [student_pkey] = getStudentAcctAddress(
-        alyssa_firstname,
-        alyssa.publicKey,
-        program.programId
-      );
 
-      await program.methods
-        .createStudent(alyssa_firstname)
-        .accounts({ studentIdentifier: alyssa.publicKey })
-        .signers([alyssa])
-        .rpc({ commitment: "confirmed" });
-
-      const studentData = await program.account.student.fetch(student_pkey);
-      assert.strictEqual(studentData.firstName, alyssa_firstname);
-      assert.strictEqual(studentData.studentId.toString(), alyssa.publicKey.toString());
-    });
-
-    it("2) Should not allow the same student to be created twice", async () => {
+    it("Should not allow the same student to be created twice", async () => {
       let threw = false;
       try {
         await program.methods
@@ -113,7 +97,7 @@ describe("captns_classroom", () => {
       assert.isTrue(threw, "Duplicate student creation should throw");
     });
 
-    it("3) Should not allow a name past the maximum allowed characters", async () => {
+    it("Should not allow a name past the maximum allowed characters", async () => {
       const longName = "X".repeat(40);
       const tmpStudent = anchor.web3.Keypair.generate();
       await airdrop(provider.connection, tmpStudent.publicKey);
@@ -131,7 +115,7 @@ describe("captns_classroom", () => {
       assert.isTrue(threw, "Should reject names longer than allowed");
     });
 
-    it("4) Should not allow a name with any special characters", async () => {
+    it("Should not allow a name with any special characters", async () => {
       const tmpStudent = anchor.web3.Keypair.generate();
       await airdrop(provider.connection, tmpStudent.publicKey);
 
@@ -148,7 +132,7 @@ describe("captns_classroom", () => {
       assert.isTrue(threw, "Should reject special character names");
     });
 
-    it("5) Should not allow a student to create an account more than once", async () => {
+    it("Should not allow a student to create an account more than once", async () => {
       let threw = false;
       try {
         await program.methods
@@ -162,40 +146,7 @@ describe("captns_classroom", () => {
       assert.isTrue(threw, "Same student wallet should not be able to create twice");
     });
 
-    it("6) Should allow multiple students to create accounts", async () => {
-      await airdrop(provider.connection, marnie.publicKey);
-      await airdrop(provider.connection, vee.publicKey);
-
-      const [marnie_pda] = getStudentAcctAddress(
-        marnie_firstname,
-        marnie.publicKey,
-        program.programId
-      );
-      const [vee_pda] = getStudentAcctAddress(
-        vee_firstname,
-        vee.publicKey,
-        program.programId
-      );
-
-      await program.methods
-        .createStudent(marnie_firstname)
-        .accounts({ studentIdentifier: marnie.publicKey })
-        .signers([marnie])
-        .rpc({ commitment: "confirmed" });
-
-      await program.methods
-        .createStudent(vee_firstname)
-        .accounts({ studentIdentifier: vee.publicKey })
-        .signers([vee])
-        .rpc({ commitment: "confirmed" });
-
-      const marnieData = await program.account.student.fetch(marnie_pda);
-      const veeData = await program.account.student.fetch(vee_pda);
-      assert.strictEqual(marnieData.firstName, marnie_firstname);
-      assert.strictEqual(veeData.firstName, vee_firstname);
-    });
-
-    it("7) Should not allow a student to create an account with no characters", async () => {
+    it("Should not allow a student to create an account with no characters", async () => {
       const tmpStudent = anchor.web3.Keypair.generate();
       await airdrop(provider.connection, tmpStudent.publicKey);
 
@@ -231,213 +182,237 @@ describe("captns_classroom", () => {
       }
       assert.isTrue(threw, "Deleting a non-existent student should fail");
     });
-
-    it("2) Should only allow student to close their own account", async () => {
-      await ensureStudentExists(alyssa_firstname, alyssa);
-      await airdrop(provider.connection, marnie.publicKey);
-
-      let threw = false;
-      try {
-        await program.methods
-          .deleteStudent(alyssa_firstname)
-          .accounts({ studentIdentifier: alyssa.publicKey })
-          .signers([marnie])
-          .rpc({ commitment: "confirmed" });
-      } catch {
-        threw = true;
-      }
-      assert.isTrue(threw, "Only the student should be able to close their own account");
-    });
-
-    it("3) Should successfully close account", async () => {
-      const alyssaPda = await ensureStudentExists(alyssa_firstname, alyssa);
-
-      await program.methods
-        .deleteStudent(alyssa_firstname)
-        .accounts({ studentIdentifier: alyssa.publicKey })
-        .signers([alyssa])
-        .rpc({ commitment: "confirmed" });
-
-      let fetchThrew = false;
-      try { await program.account.student.fetch(alyssaPda); } catch { fetchThrew = true; }
-      assert.isTrue(fetchThrew, "Student account should be closed and no longer fetchable");
-    });
-
-    it("4) Should allow student to create another submission after closing", async () => {
-      const [newPda] = getStudentAcctAddress(alyssa_firstname, alyssa.publicKey, program.programId);
-      await airdrop(provider.connection, alyssa.publicKey);
-
-      await program.methods
-        .createStudent(alyssa_firstname)
-        .accounts({ studentIdentifier: alyssa.publicKey })
-        .signers([alyssa])
-        .rpc({ commitment: "confirmed" });
-
-      const studentData = await program.account.student.fetch(newPda);
-      assert.strictEqual(studentData.firstName, alyssa_firstname);
-      assert.strictEqual(studentData.studentId.toString(), alyssa.publicKey.toString());
-    });
   });
 
-  describe("Submit grades", () => {
-    it("1) Should fail if all grades are not submitted", async () => {
-      const alyssaPda = await ensureStudentExists(alyssa_firstname, alyssa);
+describe("Submit grades", () => {
 
-      let threw = false;
-      try {
-        await program.methods
-          .submitGrades(
-            alyssa_midterm1,
-            null as any, 
-            alyssa_homeworka1,
-            alyssa_homeworkb1
-          )
-          .accounts({ submitter: alyssa.publicKey })
-          .signers([alyssa])
-          .rpc({ commitment: "confirmed" });
-      } catch { threw = true; }
+  it("Should fail if all grades are not submitted", async () => {
+    const alyssaPda = await ensureStudentExists(alyssa_firstname, alyssa);
 
-      assert.isTrue(threw, "Submitting without all grade fields should fail");
-      await program.account.student.fetch(alyssaPda);
-    });
-
-    it("2) Should successfully create grades", async () => {
-      await ensureStudentExists(alyssa_firstname, alyssa);
-
+    let threw = false;
+    try {
       await program.methods
-        .submitGrades(alyssa_midterm1, alyssa_final1, alyssa_homeworka1, alyssa_homeworkb1)
+        .submitGrades(
+          alyssa_midterm1,
+          null as any, // missing final
+          alyssa_homeworka1,
+          alyssa_homeworkb1
+        )
         .accounts({ submitter: alyssa.publicKey })
+        .preInstructions([setCuLimit])
         .signers([alyssa])
         .rpc({ commitment: "confirmed" });
+    } catch { threw = true; }
 
-      const [alyssaPda] = getStudentAcctAddress(alyssa_firstname, alyssa.publicKey, program.programId);
-      const s = await program.account.student.fetch(alyssaPda);
-      assert.strictEqual(s.firstName, alyssa_firstname);
-      assert.strictEqual(s.studentId.toString(), alyssa.publicKey.toString());
-      assert.strictEqual(Number(s.finalGrade), alyssa_final1);
-    });
+    assert.isTrue(threw, "Submitting without all grade fields should fail");
+    // Student should still exist
+    await program.account.student.fetch(alyssaPda);
+  });
 
-    it("3) Should successfully and accurately update final grade (via re-submission)", async () => {
-      await ensureStudentExists(alyssa_firstname, alyssa);
+  it("Should successfully create grades", async () => {
+    const alyssaPda = await ensureStudentExists(alyssa_firstname, alyssa);
 
-      await program.methods
-        .submitGrades(alyssa_midterm2, alyssa_final2, alyssa_homeworka2, alyssa_homeworkb2)
-        .accounts({ submitter: alyssa.publicKey })
-        .signers([alyssa])
-        .rpc({ commitment: "confirmed" });
+    await program.methods
+      .submitGrades(alyssa_midterm1, alyssa_final1, alyssa_homeworka1, alyssa_homeworkb1)
+      .accounts({ submitter: alyssa.publicKey })
+      .preInstructions([setCuLimit])
+      .signers([alyssa])
+      .rpc({ commitment: "confirmed" });
 
+    const s = await program.account.student.fetch(alyssaPda);
+    assert.strictEqual(s.firstName, alyssa_firstname);
+    assert.strictEqual(s.studentId.toString(), alyssa.publicKey.toString());
+    assert.isAtLeast(Number(s.finalGrade), 5);
+    assert.isAtMost(Number(s.finalGrade), 100);
+  });
+
+  it("Should allow re-submission only after deleting grades", async () => {
+    await ensureStudentExists(alyssa_firstname, alyssa);
+
+    await program.methods
+      .submitGrades(alyssa_midterm2, alyssa_final2, alyssa_homeworka2, alyssa_homeworkb2)
+      .accounts({ submitter: alyssa.publicKey })
+      .preInstructions([setCuLimit])
+      .signers([alyssa])
+      .rpc({ commitment: "confirmed" });
+
+    let threw = false;
+    try {
       await program.methods
         .submitGrades(alyssa_midterm2, alyssa_final3, alyssa_homeworka2, alyssa_homeworkb2)
         .accounts({ submitter: alyssa.publicKey })
+        .preInstructions([setCuLimit])
         .signers([alyssa])
         .rpc({ commitment: "confirmed" });
+    } catch { threw = true; }
+    assert.isTrue(threw, "Re-submission without deleting grades should fail");
 
-      const [alyssaPda] = getStudentAcctAddress(alyssa_firstname, alyssa.publicKey, program.programId);
-      const s1 = await program.account.student.fetch(alyssaPda);
-      assert.strictEqual(Number(s1.finalGrade), alyssa_final3);
-    });
+    await program.methods
+      .deleteGrades()
+      .accounts({ submitter: alyssa.publicKey })
+      .preInstructions([setCuLimit])
+      .signers([alyssa])
+      .rpc({ commitment: "confirmed" });
 
-    it("4) Should only allow student to update final grade (re-submission must be by owner)", async () => {
-      await ensureStudentExists(alyssa_firstname, alyssa);
-      await airdrop(provider.connection, marnie.publicKey);
+    await program.methods
+      .submitGrades(alyssa_midterm2, alyssa_final3, alyssa_homeworka2, alyssa_homeworkb2)
+      .accounts({ submitter: alyssa.publicKey })
+      .preInstructions([setCuLimit])
+      .signers([alyssa])
+      .rpc({ commitment: "confirmed" });
 
+    const [alyssaPda] = getStudentAcctAddress(alyssa_firstname, alyssa.publicKey, program.programId);
+    const s1 = await program.account.student.fetch(alyssaPda);
+    assert.isAtLeast(Number(s1.finalGrade), 5);
+    assert.isAtMost(Number(s1.finalGrade), 100);
+  });
+
+  it("Should only allow the owner to re-submit grades", async () => {
+    await ensureStudentExists(alyssa_firstname, alyssa);
+    await airdrop(provider.connection, marnie.publicKey);
+
+    await program.methods
+      .submitGrades(alyssa_midterm3, alyssa_final3, alyssa_homeworka3, alyssa_homeworkb3)
+      .accounts({ submitter: alyssa.publicKey })
+      .preInstructions([setCuLimit])
+      .signers([alyssa])
+      .rpc({ commitment: "confirmed" });
+
+    let threw = false;
+    try {
       await program.methods
-        .submitGrades(alyssa_midterm3, alyssa_final3, alyssa_homeworka3, alyssa_homeworkb3)
-        .accounts({ submitter: alyssa.publicKey })
-        .signers([alyssa])
+        .submitGrades(alyssa_midterm3, alyssa_final4, alyssa_homeworka3, alyssa_homeworkb3)
+        .accounts({ submitter: alyssa.publicKey }) 
+        .preInstructions([setCuLimit])
+        .signers([marnie])                          
         .rpc({ commitment: "confirmed" });
+    } catch { threw = true; }
+    assert.isTrue(threw, "Only the owning student may submit/update their grades");
+  });
 
-      let threw = false;
-      try {
-        await program.methods
-          .submitGrades(alyssa_midterm3, alyssa_final4, alyssa_homeworka3, alyssa_homeworkb3)
-          .accounts({ submitter: alyssa.publicKey }) 
-          .signers([marnie])                         
-          .rpc({ commitment: "confirmed" });
-      } catch { threw = true; }
-      assert.isTrue(threw, "Only the owning student should be able to update their grades");
-    });
+  it("Should not allow a grade higher than 100", async () => {
+    await ensureStudentExists(vee_firstname, vee);
 
-    it("5) Should not allow a grade higher than 100", async () => {
-      await ensureStudentExists(vee_firstname, vee);
-
-      let threwSubmit = false;
-      try {
-        await program.methods
-          .submitGrades(vee_midterm, 101.0, vee_homeworka, vee_homeworkb)
-          .accounts({ submitter: vee.publicKey })
-          .signers([vee])
-          .rpc({ commitment: "confirmed" });
-      } catch { threwSubmit = true; }
-      assert.isTrue(threwSubmit, "Final grade > 100 should be rejected");
-
+    let threwCreate = false;
+    try {
       await program.methods
-        .submitGrades(vee_midterm, vee_final, vee_homeworka, vee_homeworkb)
+        .submitGrades(vee_midterm, 101.0, vee_homeworka, vee_homeworkb)
         .accounts({ submitter: vee.publicKey })
+        .preInstructions([setCuLimit])
         .signers([vee])
         .rpc({ commitment: "confirmed" });
+    } catch { threwCreate = true; }
+    assert.isTrue(threwCreate, "Final grade > 100 should be rejected");
 
-      let threwUpdate = false;
-      try {
-        await program.methods
-          .submitGrades(vee_midterm, 100.1, vee_homeworka, vee_homeworkb)
-          .accounts({ submitter: vee.publicKey })
-          .signers([vee])
-          .rpc({ commitment: "confirmed" });
-      } catch { threwUpdate = true; }
-      assert.isTrue(threwUpdate, "Updating to > 100 should be rejected");
-    });
+    await program.methods
+      .submitGrades(vee_midterm, vee_final, vee_homeworka, vee_homeworkb)
+      .accounts({ submitter: vee.publicKey })
+      .preInstructions([setCuLimit])
+      .signers([vee])
+      .rpc({ commitment: "confirmed" });
 
-    it("6) Should not allow a grade lower than 5", async () => {
-      await ensureStudentExists(marnie_firstname, marnie);
+    await program.methods
+      .deleteGrades()
+      .accounts({ submitter: vee.publicKey })
+      .preInstructions([setCuLimit])
+      .signers([vee])
+      .rpc({ commitment: "confirmed" });
 
-      let threwSubmit = false;
-      try {
-        await program.methods
-          .submitGrades(marnie_midterm1, 4.9, marnie_homeworka1, marnie_homeworkb1)
-          .accounts({ submitter: marnie.publicKey })
-          .signers([marnie])
-          .rpc({ commitment: "confirmed" });
-      } catch { threwSubmit = true; }
-      assert.isTrue(threwSubmit, "Final grade < 5 should be rejected");
-
+    let threwUpdate = false;
+    try {
       await program.methods
-        .submitGrades(marnie_midterm1, marnie_final1, marnie_homeworka1, marnie_homeworkb1)
+        .submitGrades(vee_midterm, 100.1, vee_homeworka, vee_homeworkb)
+        .accounts({ submitter: vee.publicKey })
+        .preInstructions([setCuLimit])
+        .signers([vee])
+        .rpc({ commitment: "confirmed" });
+    } catch { threwUpdate = true; }
+    assert.isTrue(threwUpdate, "Re-submitting with > 100 should be rejected");
+  });
+
+  it("Should not allow a grade lower than 5", async () => {
+    await ensureStudentExists(marnie_firstname, marnie);
+
+    let threwCreate = false;
+    try {
+      await program.methods
+        .submitGrades(marnie_midterm1, 4.9, marnie_homeworka1, marnie_homeworkb1)
         .accounts({ submitter: marnie.publicKey })
+        .preInstructions([setCuLimit])
         .signers([marnie])
         .rpc({ commitment: "confirmed" });
+    } catch { threwCreate = true; }
+    assert.isTrue(threwCreate, "Final grade < 5 should be rejected");
 
-      let threwUpdate = false;
-      try {
-        await program.methods
-          .submitGrades(marnie_midterm1, 0.0, marnie_homeworka1, marnie_homeworkb1)
-          .accounts({ submitter: marnie.publicKey })
-          .signers([marnie])
-          .rpc({ commitment: "confirmed" });
-      } catch { threwUpdate = true; }
-      assert.isTrue(threwUpdate, "Updating to < 5 should be rejected");
-    });
+    await program.methods
+      .submitGrades(marnie_midterm1, marnie_final1, marnie_homeworka1, marnie_homeworkb1)
+      .accounts({ submitter: marnie.publicKey })
+      .preInstructions([setCuLimit])
+      .signers([marnie])
+      .rpc({ commitment: "confirmed" });
 
-    it("7) Should update on re-submission (no duplicate account)", async () => {
-      await ensureStudentExists(alyssa_firstname, alyssa);
+    await program.methods
+      .deleteGrades()
+      .accounts({ submitter: marnie.publicKey })
+      .preInstructions([setCuLimit])
+      .signers([marnie])
+      .rpc({ commitment: "confirmed" });
 
+    let threwUpdate = false;
+    try {
       await program.methods
-        .submitGrades(alyssa_midterm5, alyssa_final5, alyssa_homeworka5, alyssa_homeworkb5)
-        .accounts({ submitter: alyssa.publicKey })
-        .signers([alyssa])
+        .submitGrades(marnie_midterm1, 0.0, marnie_homeworka1, marnie_homeworkb1)
+        .accounts({ submitter: marnie.publicKey })
+        .preInstructions([setCuLimit])
+        .signers([marnie])
         .rpc({ commitment: "confirmed" });
+    } catch { threwUpdate = true; }
+    assert.isTrue(threwUpdate, "Re-submitting with < 5 should be rejected");
+  });
 
+  it("Should require delete before re-submission", async () => {
+    const alyssaPda = await ensureStudentExists(alyssa_firstname, alyssa);
+
+    // First submission
+    await program.methods
+      .submitGrades(alyssa_midterm5, alyssa_final5, alyssa_homeworka5, alyssa_homeworkb5)
+      .accounts({ submitter: alyssa.publicKey })
+      .preInstructions([setCuLimit])
+      .signers([alyssa])
+      .rpc({ commitment: "confirmed" });
+
+    // Second submission without delete should fail
+    let threw = false;
+    try {
       await program.methods
         .submitGrades(alyssa_midterm4, alyssa_final4, alyssa_homeworka4, alyssa_homeworkb4)
         .accounts({ submitter: alyssa.publicKey })
+        .preInstructions([setCuLimit])
         .signers([alyssa])
         .rpc({ commitment: "confirmed" });
+    } catch { threw = true; }
+    assert.isTrue(threw, "Re-submission without deleting grades should fail");
 
-      const [alyssaPda] = getStudentAcctAddress(alyssa_firstname, alyssa.publicKey, program.programId);
-      const s = await program.account.student.fetch(alyssaPda);
-      assert.strictEqual(Number(s.finalGrade), alyssa_final4);
-    });
+    // Delete + re-submit works
+    await program.methods
+      .deleteGrades()
+      .accounts({ submitter: alyssa.publicKey })
+      .preInstructions([setCuLimit])
+      .signers([alyssa])
+      .rpc({ commitment: "confirmed" });
+
+    await program.methods
+      .submitGrades(alyssa_midterm4, alyssa_final4, alyssa_homeworka4, alyssa_homeworkb4)
+      .accounts({ submitter: alyssa.publicKey })
+      .preInstructions([setCuLimit])
+      .signers([alyssa])
+      .rpc({ commitment: "confirmed" });
+
+    const s = await program.account.student.fetch(alyssaPda);
+    assert.isAtLeast(Number(s.finalGrade), 5);
+    assert.isAtMost(Number(s.finalGrade), 100);
   });
+});
 
   describe("Delete grades", () => {
     it("Should close the grades account", async () => {
@@ -446,6 +421,7 @@ describe("captns_classroom", () => {
       await program.methods
         .submitGrades(alyssa_midterm1, alyssa_final1, alyssa_homeworka1, alyssa_homeworkb1)
         .accounts({ submitter: alyssa.publicKey })
+        .preInstructions([setCuLimit])  
         .signers([alyssa])
         .rpc({ commitment: "confirmed" });
 

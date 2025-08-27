@@ -20,10 +20,10 @@ use anchor_lang::prelude::*;
 pub mod errors;
 pub mod instructions;
 pub mod states;
-pub mod events;
 
 declare_id!("Gs9h1gud4uUGri9nTu38QuotTXnwmiaoh23wqocZma96");
 
+#[warn(deprecated)]
 #[program]
 pub mod captns_classroom {
     use super::*;

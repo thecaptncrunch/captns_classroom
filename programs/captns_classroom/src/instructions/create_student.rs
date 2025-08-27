@@ -2,7 +2,6 @@ use anchor_lang::prelude::*;
 
 use crate::{instruction};
 use crate::states::{self, *};
-use crate::events::{self, *};
 use crate::errors::ClassError;
 
 pub fn create_student(
@@ -20,11 +19,6 @@ pub fn create_student(
     student.first_name = first_name;
     student.final_grade = 0.0;
     student.bump = ctx.bumps.student.into(); 
-
-    emit!(StudentEvent {
-        student_id: ctx.accounts.student_identifier.key(),
-        first_name: student.first_name.clone(),
-    });
 
     Ok(())
 }
