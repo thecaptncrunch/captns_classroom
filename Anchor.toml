@@ -5,14 +5,14 @@ package_manager = "yarn"
 resolution = true
 skip-lint = false
 
-[programs.localnet]
-captns_tarot = "4koFDYG9ymcJtV7RTjoheReoQECcLmdWdUJ5WfYPHE4T"
+[programs.devnet]
+captns_classroom = "Gs9h1gud4uUGri9nTu38QuotTXnwmiaoh23wqocZma96"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
