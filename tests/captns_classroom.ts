@@ -10,9 +10,6 @@ const GRADE_SEED = "NEW_GRADES"
 describe("captns_classroom", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
-  const setCuLimit = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({
-  units: 1_000_000,
-  });
   const program = anchor.workspace.CaptnsClassroom as Program<CaptnsClassroom>;
 
   // three students
@@ -199,7 +196,6 @@ describe("Submit grades", () => {
           alyssa_homeworkb1
         )
         .accounts({ submitter: alyssa.publicKey })
-        .preInstructions([setCuLimit])
         .signers([alyssa])
         .rpc({ commitment: "confirmed" });
     } catch { threw = true; }
@@ -215,7 +211,6 @@ describe("Submit grades", () => {
     await program.methods
       .submitGrades(alyssa_midterm1, alyssa_final1, alyssa_homeworka1, alyssa_homeworkb1)
       .accounts({ submitter: alyssa.publicKey })
-      .preInstructions([setCuLimit])
       .signers([alyssa])
       .rpc({ commitment: "confirmed" });
 
@@ -232,7 +227,6 @@ describe("Submit grades", () => {
     await program.methods
       .submitGrades(alyssa_midterm2, alyssa_final2, alyssa_homeworka2, alyssa_homeworkb2)
       .accounts({ submitter: alyssa.publicKey })
-      .preInstructions([setCuLimit])
       .signers([alyssa])
       .rpc({ commitment: "confirmed" });
 
@@ -241,7 +235,6 @@ describe("Submit grades", () => {
       await program.methods
         .submitGrades(alyssa_midterm2, alyssa_final3, alyssa_homeworka2, alyssa_homeworkb2)
         .accounts({ submitter: alyssa.publicKey })
-        .preInstructions([setCuLimit])
         .signers([alyssa])
         .rpc({ commitment: "confirmed" });
     } catch { threw = true; }
@@ -250,14 +243,12 @@ describe("Submit grades", () => {
     await program.methods
       .deleteGrades()
       .accounts({ submitter: alyssa.publicKey })
-      .preInstructions([setCuLimit])
       .signers([alyssa])
       .rpc({ commitment: "confirmed" });
 
     await program.methods
       .submitGrades(alyssa_midterm2, alyssa_final3, alyssa_homeworka2, alyssa_homeworkb2)
       .accounts({ submitter: alyssa.publicKey })
-      .preInstructions([setCuLimit])
       .signers([alyssa])
       .rpc({ commitment: "confirmed" });
 
@@ -274,7 +265,6 @@ describe("Submit grades", () => {
     await program.methods
       .submitGrades(alyssa_midterm3, alyssa_final3, alyssa_homeworka3, alyssa_homeworkb3)
       .accounts({ submitter: alyssa.publicKey })
-      .preInstructions([setCuLimit])
       .signers([alyssa])
       .rpc({ commitment: "confirmed" });
 
@@ -283,7 +273,6 @@ describe("Submit grades", () => {
       await program.methods
         .submitGrades(alyssa_midterm3, alyssa_final4, alyssa_homeworka3, alyssa_homeworkb3)
         .accounts({ submitter: alyssa.publicKey }) 
-        .preInstructions([setCuLimit])
         .signers([marnie])                          
         .rpc({ commitment: "confirmed" });
     } catch { threw = true; }
@@ -298,7 +287,6 @@ describe("Submit grades", () => {
       await program.methods
         .submitGrades(vee_midterm, 101.0, vee_homeworka, vee_homeworkb)
         .accounts({ submitter: vee.publicKey })
-        .preInstructions([setCuLimit])
         .signers([vee])
         .rpc({ commitment: "confirmed" });
     } catch { threwCreate = true; }
@@ -307,14 +295,12 @@ describe("Submit grades", () => {
     await program.methods
       .submitGrades(vee_midterm, vee_final, vee_homeworka, vee_homeworkb)
       .accounts({ submitter: vee.publicKey })
-      .preInstructions([setCuLimit])
       .signers([vee])
       .rpc({ commitment: "confirmed" });
 
     await program.methods
       .deleteGrades()
       .accounts({ submitter: vee.publicKey })
-      .preInstructions([setCuLimit])
       .signers([vee])
       .rpc({ commitment: "confirmed" });
 
@@ -323,7 +309,6 @@ describe("Submit grades", () => {
       await program.methods
         .submitGrades(vee_midterm, 100.1, vee_homeworka, vee_homeworkb)
         .accounts({ submitter: vee.publicKey })
-        .preInstructions([setCuLimit])
         .signers([vee])
         .rpc({ commitment: "confirmed" });
     } catch { threwUpdate = true; }
@@ -338,7 +323,6 @@ describe("Submit grades", () => {
       await program.methods
         .submitGrades(marnie_midterm1, 4.9, marnie_homeworka1, marnie_homeworkb1)
         .accounts({ submitter: marnie.publicKey })
-        .preInstructions([setCuLimit])
         .signers([marnie])
         .rpc({ commitment: "confirmed" });
     } catch { threwCreate = true; }
@@ -347,14 +331,12 @@ describe("Submit grades", () => {
     await program.methods
       .submitGrades(marnie_midterm1, marnie_final1, marnie_homeworka1, marnie_homeworkb1)
       .accounts({ submitter: marnie.publicKey })
-      .preInstructions([setCuLimit])
       .signers([marnie])
       .rpc({ commitment: "confirmed" });
 
     await program.methods
       .deleteGrades()
       .accounts({ submitter: marnie.publicKey })
-      .preInstructions([setCuLimit])
       .signers([marnie])
       .rpc({ commitment: "confirmed" });
 
@@ -363,7 +345,6 @@ describe("Submit grades", () => {
       await program.methods
         .submitGrades(marnie_midterm1, 0.0, marnie_homeworka1, marnie_homeworkb1)
         .accounts({ submitter: marnie.publicKey })
-        .preInstructions([setCuLimit])
         .signers([marnie])
         .rpc({ commitment: "confirmed" });
     } catch { threwUpdate = true; }
@@ -377,7 +358,6 @@ describe("Submit grades", () => {
     await program.methods
       .submitGrades(alyssa_midterm5, alyssa_final5, alyssa_homeworka5, alyssa_homeworkb5)
       .accounts({ submitter: alyssa.publicKey })
-      .preInstructions([setCuLimit])
       .signers([alyssa])
       .rpc({ commitment: "confirmed" });
 
@@ -387,7 +367,6 @@ describe("Submit grades", () => {
       await program.methods
         .submitGrades(alyssa_midterm4, alyssa_final4, alyssa_homeworka4, alyssa_homeworkb4)
         .accounts({ submitter: alyssa.publicKey })
-        .preInstructions([setCuLimit])
         .signers([alyssa])
         .rpc({ commitment: "confirmed" });
     } catch { threw = true; }
@@ -397,14 +376,12 @@ describe("Submit grades", () => {
     await program.methods
       .deleteGrades()
       .accounts({ submitter: alyssa.publicKey })
-      .preInstructions([setCuLimit])
       .signers([alyssa])
       .rpc({ commitment: "confirmed" });
 
     await program.methods
       .submitGrades(alyssa_midterm4, alyssa_final4, alyssa_homeworka4, alyssa_homeworkb4)
       .accounts({ submitter: alyssa.publicKey })
-      .preInstructions([setCuLimit])
       .signers([alyssa])
       .rpc({ commitment: "confirmed" });
 
